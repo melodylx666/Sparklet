@@ -101,7 +101,6 @@ class JavaDeserializationStream(in: InputStream, loader: ClassLoader) extends De
       // scalastyle:on classforname
       java.lang.reflect.Proxy.getProxyClass(loader, resolved: _*)
     }
-
   }
 
   def readObject[T: ClassTag](): T = objIn.readObject().asInstanceOf[T]

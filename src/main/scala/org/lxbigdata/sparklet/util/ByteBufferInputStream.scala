@@ -7,6 +7,7 @@ package org.lxbigdata.sparklet.util
  * 和FileInputStream类似，但是从ByteBuffer中读取数据。
  * read方法返回的是成功的读取数量，-1表示已经读取完
  *
+ *
  * @author lx
  * @version 1.0   
  */
@@ -34,7 +35,7 @@ class ByteBufferInputStream(private var buffer: ByteBuffer)
       cleanUp()
       -1
     } else {
-      val amountToGet = math.min(buffer.remaining(), length)
+      val amountToGet = math.min(buffer.remaining(), length) //(limit - pos) min (len)
       buffer.get(dest, offset, amountToGet)
       amountToGet
     }

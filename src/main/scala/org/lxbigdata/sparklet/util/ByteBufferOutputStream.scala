@@ -4,7 +4,6 @@ package org.lxbigdata.sparklet.util
  * ClassName: ByteBufferOutputStream
  * Package: lx.Spark.util
  * Description:  Provide a zero-copy way to convert data in ByteArrayOutputStream to ByteBuffer
- * 其直接复用了Stream流的数据，将其存储到ByteBuffer中.
  *
  * @author lx
  * @version 1.0
@@ -15,7 +14,7 @@ import java.nio.ByteBuffer
 
 class ByteBufferOutputStream(capacity: Int) extends ByteArrayOutputStream(capacity) {
 
-  def this() = this(32)
+  def this() = this(32) // default capacity is 32
 
   def getCount(): Int = count
 
