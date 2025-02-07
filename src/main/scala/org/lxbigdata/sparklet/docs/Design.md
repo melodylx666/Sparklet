@@ -152,8 +152,6 @@ on-heap分配的内存受GC管理，那off-heap的程序运行时的管理受GC�
   }
 ```
 
-
-
 ## 序列化器设计
 
 ### 序列化trait
@@ -214,7 +212,6 @@ trait DeserializationStream {
 
 刚好也用上了我上面写的小`demo`。
 
-
 ### 序列化实例
 
 #### 自定义类加载
@@ -237,3 +234,136 @@ trait DeserializationStream {
     "double" -> classOf[Double],
     "void" -> classOf[Unit])
 ```
+
+
+## 算子设计
+
+### 分区器
+
+#### Hash分区器
+
+哈希分区器的唯一成员变量，就是`分区数量`。因为具体的Hash逻辑就是只依赖的就是输入ID和其分区数量。
+
+具体分区逻辑如下：key的hashcode就是其分区编号。
+
+```java
+  override def getPartition(key: Any): Int = key match {
+    case x if x != null => {
+      val k = x.hashCode()
+      val rawMod = k % partitions
+      rawMod +(if (rawMod < 0) numPartitions  else 0)
+    }
+    case _ => 0 //这里null的分区全部是0,也是数据倾斜的来源之一
+  }
+```
+
+#### Null值处理
+
+`Null`值造成数据倾斜的原因，就在分区这里。上述的模式匹配下，大量的键值为`Null`的数据被分到了同一个0号分区。这会造成下游的`stage`分区数量之间可能存在严重的不平衡。
+
+#### Range分区器
+
+`Range`分区器的实现难度远远超过了`Hash`分区器。
+
+所以这里只讨论设计思路，暂不给出具体实现。
+
+```java
+/**
+ * partitions sortable records by range into roughly
+ * equal ranges. The ranges are determined by sampling the content of the RDD passed in.
+ */
+class RangePartitioner[K : Ordering : ClassTag, V](
+    partitions: Int,
+    @transient rdd: RDD[_ <: Product2[K,V]],
+    private val ascending: Boolean = true)
+  extends Partitioner {
+
+  private val ordering = implicitly[Ordering[K]]
+
+  // An array of upper bounds for the first (partitions - 1) partitions
+  private val rangeBounds: Array[K] = {
+    if (partitions == 1) {
+      Array()
+    } else {
+      val rddSize = rdd.count()
+      val maxSampleSize = partitions * 20.0
+      val frac = math.min(maxSampleSize / math.max(rddSize, 1), 1.0)
+      val rddSample = rdd.sample(false, frac, 1).map(_._1).collect().sorted
+      if (rddSample.length == 0) {
+        Array()
+      } else {
+        val bounds = new Array[K](partitions - 1)
+        for (i <- 0 until partitions - 1) {
+          val index = (rddSample.length - 1) * (i + 1) / partitions
+          bounds(i) = rddSample(index)
+        }
+        bounds
+      }
+    }
+  }
+
+  def numPartitions = partitions
+
+  private val binarySearch: ((Array[K], K) => Int) = CollectionsUtils.makeBinarySearch[K]
+
+  def getPartition(key: Any): Int = {
+    val k = key.asInstanceOf[K]
+    var partition = 0
+    if (rangeBounds.length <= 128) {
+      // If we have less than 128 partitions naive search
+      while (partition < rangeBounds.length && ordering.gt(k, rangeBounds(partition))) {
+        partition += 1
+      }
+    } else {
+      // Determine which binary search method to use only once.
+      partition = binarySearch(rangeBounds, k)
+      // binarySearch either returns the match location or -[insertion point]-1
+      if (partition < 0) {
+        partition = -partition-1
+      }
+      if (partition > rangeBounds.length) {
+        partition = rangeBounds.length
+      }
+    }
+    if (ascending) {
+      partition
+    } else {
+      rangeBounds.length - partition
+    }
+  }
+
+  override def equals(other: Any): Boolean = other match {
+    case r: RangePartitioner[_,_] =>
+      r.rangeBounds.sameElements(rangeBounds) && r.ascending == ascending
+    case _ =>
+      false
+  }
+}
+```
+
+可以看到，`Range`分区器的成员变量不止`numpartition`，并且还有一个`RDD`，用于抽样查看数据分布。
+
+具体这里使用到了`RDD::sample`方法，对其中的分区的数据进行采样，**这里是会触发计算任务的，即Action**。
+
+首先，对传入的`RDD`进行采样，将采样的数据进行排序，称为范围边界(`Array[K]`)。
+
+然后对进来的每个`key`，进行线性/二分查找，然后将其划分到具体的某个值范围中。
+
+可以看到，整体来说这是对数据做了一次粗粒度的排序。
+
+可以写一个小`demo`，查看一下,比如使用`spark-sql`中的`orderby`算子
+
+```plaintext
++- == Initial Plan ==
+   Sort [score#23 ASC NULLS FIRST], true, 0
+   +- Exchange rangepartitioning(score#23 ASC NULLS FIRST, 200), ENSURE_REQUIREMENTS, [plan_id=27]
+      +- FileScan csv [id#17,name#18,age#19,height#20,weight#21,handsome#22,score#23] Batched: false, DataFilters: [], Format: CSV, Location: InMemoryFileIndex(1 paths)
+```
+
+可以看到，`shuffle`的时候进行的是`rangepartition`，然后之后在每个分区内做排序，即可达到全局排序。
+
+#### 和SortShuffle?
+
+可能会有疑问，说既然`rangepartition`可以进行`partition`粒度的排序，然后`sort-based-shuffle`也是分区粒度的排序，那为什么还需要前者呢？
+
+我在这里看过源码之后并没有找到两者有结合的方式，并且`shuffle`也不止一种`sort-based`，可以看我的技术博客中总结的`sql`剖析，`sparksql`一共5种`shuffle`，还有`sort-based`，所以`rangepartition`就很有必要了。、

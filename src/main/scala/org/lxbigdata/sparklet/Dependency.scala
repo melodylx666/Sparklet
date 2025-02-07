@@ -1,6 +1,9 @@
 package org.lxbigdata.sparklet
 
 import org.lxbigdata.sparklet.rdd.RDD
+import org.lxbigdata.sparklet.serializer.Serializer
+
+import scala.reflect.ClassTag
 
 /**
  * ClassName: Dependency
@@ -34,7 +37,22 @@ class RangeDependency[T](rdd:RDD[T],smallStart:Int,bigStart:Int,length:Int) exte
 }
 
 //todo 宽依赖
-
+class ShuffleDependency[K:ClassTag,V:ClassTag,C:ClassTag]
+(
+  @transient private var _rdd:RDD[_<:Product2[K,V]],
+  val partitioner:Partitioner,
+  val serializer:Serializer,
+  val keyOrdering:Option[Ordering[K]]=None,
+  val aggregator:Option[Aggregator[K,V,C]]=None,
+  val mapSideCombine:Boolean=false
+) extends Dependency[Product2[K,V]]{
+  //shuffleId
+  private val shuffleId =  _rdd.context.newShuffleId()
+  //rdd
+  override val rdd: RDD[Product2[K, V]] = {
+    _rdd.asInstanceOf[RDD[Product2[K,V]]]
+  }
+}
 
 
 

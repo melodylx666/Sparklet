@@ -23,9 +23,9 @@ class HashPartitioner(partitions: Int) extends Partitioner {
       val rawMod = k % partitions
       rawMod +(if (rawMod < 0) numPartitions  else 0)
     }
-    case _ => 0
+    case _ => 0 //这里null的分区全部是0,也是数据倾斜的来源之一
   }
-  //判断分区器是否相等
+  //判断分区器是否相等，两个分区器相等，当且仅当分区总数相等
   override def equals(obj: Any): Boolean = {
     obj match {
       case hp: HashPartitioner => hp.numPartitions == numPartitions
