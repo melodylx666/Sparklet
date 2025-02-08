@@ -6,7 +6,7 @@ import java.util.concurrent.{Callable, CompletableFuture, ExecutorService, Execu
 /**
  * ClassName: TaskScheduler
  * Package: org.lxbigdata.sparklet.scheduler
- * Description: 任务调，此处使用FIFO模式提交到本地线程池
+ * Description: 任务调度，此处使用FIFO模式提交到本地线程池
  *
  * @author lx
  * @version 1.0   

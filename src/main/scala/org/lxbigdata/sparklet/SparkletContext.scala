@@ -1,6 +1,7 @@
 package org.lxbigdata.sparklet
 
 import org.lxbigdata.sparklet.rdd.RDD
+import org.lxbigdata.sparklet.scheduler.{DAGScheduler, SimpleTaskScheduler}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.reflect.ClassTag
@@ -18,9 +19,11 @@ class SparkletContext(sparkletConf: SparkletConf) {
   private val nextRDDId = new AtomicInteger(0)
   private val nextShuffleId = new AtomicInteger(0)
   private val stopped = new AtomicInteger(0)
-
-  private val env: SparkletEnv = SparkletEnv.createDriverEnv(sparkletConf)
-
+  //上下文变量:env,dagScheduler,taskScheduler
+  //真正的spark实现中，有30个之多
+  private var _env: SparkletEnv = SparkletEnv.createDriverEnv(sparkletConf)
+  private var _taskScheduler: SimpleTaskScheduler = new SimpleTaskScheduler()
+  private var _dagScheduler: DAGScheduler = new DAGScheduler(this, _taskScheduler)
 
   def newRDDId(): Int = {
     nextRDDId.getAndIncrement()
@@ -29,7 +32,7 @@ class SparkletContext(sparkletConf: SparkletConf) {
     nextShuffleId.getAndIncrement()
   }
   def getEnv: SparkletEnv = {
-    env
+    _env
   }
 
   //rdd,func
