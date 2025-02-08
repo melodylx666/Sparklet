@@ -1,10 +1,11 @@
 package org.lxbigdata.sparklet.scheduler
 
 import org.lxbigdata.sparklet.util.{EventLoop, ThreadUtils}
-import org.lxbigdata.sparklet.{SparkletContext, TaskContext}
+import org.lxbigdata.sparklet.{ShuffleDependency, SparkletContext, TaskContext}
 import org.lxbigdata.sparklet.rdd.RDD
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
@@ -69,11 +70,47 @@ class DAGScheduler
 
   }
 
+  private def createResultStage
+  (
+    finalRDD:RDD[_],
+    func:Function2[TaskContext,Iterator[_],_],
+    partitions:Array[Int],
+    jobId:Int
+  ): ResultStage = {
+    val shuffleDeps = getShuffleDependencies(finalRDD)
+    ???
+  }
 
+  private def getShuffleDependencies(curRDD: RDD[_]):mutable.Set[ShuffleDependency[_,_,_]] = {
+    //用来保存shuffle依赖的hashSet，因为上游可能有多个依赖关系(比如join算子)，所以用set集合
+    val parents = mutable.Set[ShuffleDependency[_,_,_]]()
+    //已经访问过的RDD
+    val visited = mutable.Set[RDD[_]]()
+    //等待访问的RDD
+    val waitingForVisit = mutable.Stack[RDD[_]]()
+    waitingForVisit.push(curRDD)
+    while(waitingForVisit.nonEmpty){
+      val toVisit = waitingForVisit.pop()
+      if(!visited.contains(toVisit)){
+        visited += toVisit
+        toVisit.dependencies.foreach{
+          case shuffleDep:ShuffleDependency[_,_,_] => {
+            parents += shuffleDep
+          }
+          case dependency => {
+            waitingForVisit.push(dependency.rdd)
+          }
+        }
+      }
+    }
+    //如果3个Stage为 A -> B -> C,则返回B->C中的Dep
+    parents
+  }
 
 }
 
 //the main event loop
+//todo ：eventLoop机制文档
 class DAGSchedulerEventProcessLoop(dagScheduler:DAGScheduler)
   extends EventLoop[DAGSchedulerEvent]("dag-scheduler-event-loop") {
   override def onReceive(event: DAGSchedulerEvent): Unit = {

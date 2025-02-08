@@ -54,8 +54,10 @@ class JavaSerializerInstance
 
 }
 
+//装饰器模式
 class JavaSerializationStream(out: OutputStream, counterReset: Int, extraDebugInfo: Boolean)
   extends SerializationStream {
+
   private val objOut = new ObjectOutputStream(out)
   private var counter = 0
 
@@ -81,6 +83,7 @@ class JavaSerializationStream(out: OutputStream, counterReset: Int, extraDebugIn
     objOut.close()
   }
 }
+//同样的装饰器模式设计
 class JavaDeserializationStream(in: InputStream, loader: ClassLoader) extends DeserializationStream {
 
   private val objIn = new ObjectInputStream(in) {
