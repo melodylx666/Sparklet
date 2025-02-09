@@ -1,5 +1,7 @@
 package org.lxbigdata.sparklet.scheduler
 
+import org.lxbigdata.sparklet.SparkletConf
+
 import java.util.concurrent.{Callable, CompletableFuture, ExecutorService, Executors, Future}
 
 
@@ -12,15 +14,22 @@ import java.util.concurrent.{Callable, CompletableFuture, ExecutorService, Execu
  * @version 1.0   
  */
 class SimpleTaskScheduler{
-  private val executors = Executors.newVirtualThreadPerTaskExecutor()
-  def getExecutors: ExecutorService = executors
+  //不用trait了反正只实现单机版
+  private var _backEnd:LocalBackEnd = null
+  private var _dagScheduler:DAGScheduler = null
 
-  def submitTasks(taskSet: TaskSet): Array[Future[Any]] = {
+  def init(backend: LocalBackEnd, dagScheduler:DAGScheduler):Unit = {
+    _backEnd = backend
+    _dagScheduler = dagScheduler
+  }
+
+  def getDagScheduler():DAGScheduler = {
+    _dagScheduler
+  }
+
+  def submitTasks(taskSet: TaskSet) = {
     val tasks = taskSet.tasks
-    return tasks.map(task => {
-      executors.submit(() => {
-        task.run()
-      })
-    })
+    _backEnd.receiveOffers(tasks)
   }
 }
+

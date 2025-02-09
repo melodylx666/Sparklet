@@ -39,7 +39,7 @@ class DiskObjectWriter
     this
   }
   //写入数据
-  def writer(value:Any):Unit = {
+  def write(value:Any):Unit = {
     if(!initialized){
       open()
     }

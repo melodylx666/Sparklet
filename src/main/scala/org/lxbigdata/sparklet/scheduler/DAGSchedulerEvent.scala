@@ -13,7 +13,7 @@ import org.lxbigdata.sparklet.rdd.RDD
  */
 sealed trait DAGSchedulerEvent
 
-//提交任务事件，这里全部只用这一个
+//提交全局Job
 case class SimpleSubmitted
 (
   jobId:Int,
@@ -22,3 +22,10 @@ case class SimpleSubmitted
   partitions:Array[Int],
   listener:JobListener
 )extends DAGSchedulerEvent
+
+//task完成的事件
+case class SimpleCompletion
+(
+  task:Task[_],
+  result:Any
+) extends DAGSchedulerEvent

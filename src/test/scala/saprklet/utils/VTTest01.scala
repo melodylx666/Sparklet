@@ -33,4 +33,17 @@ class VTTest01 {
     println(s"耗时：${diff}s")
   }
 
+  @Test
+  def test02(): Unit = {
+    val service = Executors.newVirtualThreadPerTaskExecutor()
+    val future = service.submit(new Runnable {
+      override def run(): Unit = {
+        Thread.sleep(5000)
+        println("hello")
+      }
+    })
+    //依旧是同步阻塞的
+    future.get()
+    println("over")
+  }
 }

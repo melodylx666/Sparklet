@@ -54,7 +54,7 @@ class ShuffleDependency[K:ClassTag,V:ClassTag,C:ClassTag]
   val mapSideCombine:Boolean=false
 ) extends Dependency[Product2[K,V]]{
   //shuffleId
-  private val shuffleId =  _rdd.context.newShuffleId()
+  val shuffleId =  _rdd.context.newShuffleId()
   //获取shuffle handle来操作shuffle
   val shuffleHandle = _rdd.context.getEnv.shuffleManager.registerShuffle(shuffleId,_rdd.partitions.length,this)
   //rdd
