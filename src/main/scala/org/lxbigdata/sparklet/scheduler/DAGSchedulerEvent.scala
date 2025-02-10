@@ -23,9 +23,16 @@ case class SimpleSubmitted
   listener:JobListener
 )extends DAGSchedulerEvent
 
-//task完成的事件
+//MapTask完成的事件
 case class SimpleCompletion
 (
   task:Task[_],
+  result:Any
+) extends DAGSchedulerEvent
+
+//最后一个stage的Task完成的事件
+case class SimpleFinalTaskCompletion
+(
+  task: Task[_],
   result:Any
 ) extends DAGSchedulerEvent

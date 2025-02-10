@@ -35,8 +35,6 @@ class DAGScheduler
   private val waitingStages = mutable.Set[Stage]()
   //Stages we are running right now
   private val runningStages = mutable.Set[Stage]()
-  //使用map来维护stage的完成状态
-  private val waitingStageIdToMapStatus = mutable.Map[Int,mutable.Set[MapStatus]]()
 
   def runJob[T,U]
   (
@@ -66,13 +64,12 @@ class DAGScheduler
     resultHandler:(Int,U) => Unit
   ):JobWaiter[U] = {
     val jobId = nextJobId.getAndIncrement()
-    val waiter = new JobWaiter[U](this,jobId,partitions.size,resultHandler)
-
+//    val waiter = new JobWaiter[U](this,jobId,partitions.size,resultHandler)
+    val waiter = JobWaiter.getOrCreate[U](this,jobId,partitions.size,resultHandler).asInstanceOf[JobWaiter[U]]
     val fun2 = func.asInstanceOf[(TaskContext,Iterator[_]) => _]
     eventProcessLoop.post(SimpleSubmitted(jobId,finalRDD,fun2,partitions,waiter))
     waiter
   }
-  //todo 切分stage提交tasks
   def exec
   (
     jobId: Int,
@@ -86,7 +83,6 @@ class DAGScheduler
     //todo listener没有用上
     //submit stage
     submitStage(finalStage)
-
   }
 
   /*-------stage create methods系列，-------*/
@@ -265,18 +261,22 @@ class DAGScheduler
 
     //提交任务给taskScheduler，让其分发计算任务到backend(remote or local)
     if(tasks.nonEmpty){
+      //注册一个StageWaiter
+      val waiter: MapStageWaiter = MapStageWaiter.getOrCreate(this, stage.id, tasks.size)
       taskScheduler.submitTasks(new TaskSet(tasks.toArray,stage.id,jobId))
+      //等待任务完成
+      ThreadUtils.awaitReady(waiter.completionFuture, Duration.Inf)
+      waiter.completionFuture.value.get match {
+        case Success(v) => {
+          submitWaitingChildStages(stage)
+        }
+        case Failure(e) => {
+          println(s"can not forward")
+        }
+      }
     }
-    //todo child stage case?
   }
 
-  //需要区分mapTask or resultTask
-  //todo 是否要和和JobListener区分开
-  def taskCompletion(task: Task[_], result: Any): Unit = {
-    if(task.isInstanceOf[ShuffleMapTask]){
-      //todo 统计mapTask数量最终触发后续stage
-    }
-  }
   //submit the waiting child stage,like: ResultStage
   private def submitWaitingChildStages(stage: Stage):Unit ={
     val stages: Seq[Stage] = waitingStages.filter(x => x.parents.contains(stage)).toList
@@ -298,9 +298,6 @@ class DAGSchedulerEventProcessLoop(dagScheduler:DAGScheduler)
     event match {
       case SimpleSubmitted(jobId,rdd,func,partitions,listener) => {
         dagScheduler.exec(jobId,rdd,func,partitions,listener)
-      }
-      case SimpleCompletion(jobId,result) => {
-        dagScheduler.taskCompletion(jobId,result)
       }
       case _ => {
         println("other event")

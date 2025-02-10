@@ -27,9 +27,8 @@ class SimpleTaskScheduler{
     _dagScheduler
   }
 
-  def submitTasks(taskSet: TaskSet) = {
-    val tasks = taskSet.tasks
-    _backEnd.receiveOffers(tasks)
+  def submitTasks(taskSet: TaskSet): Unit = {
+    _backEnd.receiveOffers(taskSet)
   }
 }
 

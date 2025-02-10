@@ -15,31 +15,27 @@ import java.util.concurrent.{Callable, ExecutorService, Executors, Future}
 class LocalBackEnd(conf:SparkletConf, taskScheduler:SimpleTaskScheduler){
   //使用协程/虚拟线程
   private val executors = Executors.newVirtualThreadPerTaskExecutor()
-  private class TaskRunner(task:Task[_]) extends Runnable {
+  private class TaskRunner(task:Task[_],jobId:Int) extends Runnable {
 
     override def run(): Unit = {
       val value: Any = task.run()
       value match {
         case m:MapStatus => {
-          //拿到dagScheduler的eventLoop就可以
-          //没有listenerBus逻辑，只能暂时这么做了
-          handleMapStatus(task,m)
+          //todo 没有listenerBus逻辑，只能暂时这么做了
+          MapStageWaiter.checkStage(task.stageId).taskSucceeded(task.partitionId, value)
         }
         case r => {
-          //todo result task结果
+          JobWaiter.checkJob(jobId).taskSucceeded(task.partitionId, value)
         }
       }
     }
   }
-  //todo 暂时这么处理maptask结果
-  private def handleMapStatus(task: Task[_],mapStatus:MapStatus):Unit = {
-    val scheduler: DAGScheduler = taskScheduler.getDagScheduler()
-    scheduler.eventProcessLoop.post(new SimpleCompletion(task, mapStatus))
-  }
-  def receiveOffers(tasks:Array[Task[_]]):Unit = {
-    //todo 这里异步任务的组合逻辑该怎么设计，还是说再加一个listener?
+
+  def receiveOffers(taskSet: TaskSet):Unit = {
+    val tasks = taskSet.tasks
+    val jobId = taskSet.jobId
     tasks
-      .map(task => new TaskRunner(task))
+      .map(task => new TaskRunner(task, jobId))
       .foreach(x => executors.submit(x))
   }
 

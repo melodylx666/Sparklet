@@ -1,5 +1,6 @@
 package org.lxbigdata.sparklet.scheduler
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.{Future, Promise}
 
@@ -46,5 +47,21 @@ class JobWaiter[T]
     if(!jobPromise.tryFailure(exception)){
       println(s"Ignore failure:${exception.getMessage}")
     }
+  }
+}
+object JobWaiter{
+  //拿到全局的JobWaiter
+  private val waiters = new ConcurrentHashMap[Int, JobWaiter[_]]()
+  def getOrCreate[T](
+    dagScheduler: DAGScheduler,
+    jobId: Int,
+    totalTasks: Int,
+    resultHandler: (Int, T) => Unit
+  ): JobWaiter[_] = {
+    waiters.computeIfAbsent(jobId, _ => new JobWaiter[T](dagScheduler, jobId, totalTasks, resultHandler))
+  }
+
+  def checkJob(jobId: Int): JobWaiter[_] = {
+    waiters.get(jobId)
   }
 }

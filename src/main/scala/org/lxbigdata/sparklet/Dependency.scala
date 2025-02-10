@@ -43,7 +43,7 @@ class RangeDependency[T](_rdd:RDD[T],smallStart:Int,bigStart:Int,length:Int) ext
   override def rdd: RDD[T] = _rdd
 }
 
-//todo 宽依赖
+
 class ShuffleDependency[K:ClassTag,V:ClassTag,C:ClassTag]
 (
   @transient private var _rdd:RDD[_<:Product2[K,V]],
