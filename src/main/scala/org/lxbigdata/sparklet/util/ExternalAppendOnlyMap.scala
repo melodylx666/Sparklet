@@ -24,37 +24,44 @@ class ExternalAppendOnlyMap[K,V,C]
   serializer:Serializer = SparkletEnv.get.serializer,
   blockManager: BlockManager = SparkletEnv.get.blockManager
 ) extends Serializable with Iterable[(K, C)]{
-  //内部Map
+
   val currentMap = mutable.HashMap[K, C]()
-  override def iterator: Iterator[(K, C)] = {
-    currentMap.iterator
+
+  //将指定的key和Value插入到Map中
+  def insert(key: K, value: V): Unit = {
+    insertAll(Iterator((key, value)))
   }
-  /*-----增强方法-------*/
-  def insertAll(entries: Iterator[Product2[K,V]]):Unit = {
+
+  def insertAll(entries: Iterator[Product2[K, V]]): Unit = {
     if (currentMap == null) {
       throw new IllegalStateException(
         "Cannot insert new elements into a map after calling iterator")
     }
 
-    var curEntry:Product2[K,V] = null
-    while(entries.hasNext){
+    var curEntry: Product2[K, V] = null
+    //val update: (Boolean, C) => C = (hadVal, oldVal) => {
+    //  if (hadVal) mergeValue(oldVal, curEntry._2) else createCombiner(curEntry._2)
+    //}
+
+    while (entries.hasNext) {
       curEntry = entries.next()
       val op = currentMap.get(curEntry._1)
       op match {
-        case Some(value) => {
-          currentMap.put(curEntry._1, mergeValue(value, curEntry._2))
-        }
         case None => {
           currentMap.put(curEntry._1, createCombiner(curEntry._2))
+        }
+        case Some(oldVal) => {
+          currentMap.put(curEntry._1, mergeValue(oldVal, curEntry._2))
         }
       }
     }
   }
+
   def insertAll(entries: Iterable[Product2[K, V]]): Unit = {
     insertAll(entries.iterator)
   }
-  def insert(key: K, value: V): Unit = {
-    insertAll(Iterator((key, value)))
-  }
 
+  override def iterator: Iterator[(K, C)] = {
+    currentMap.iterator
+  }
 }

@@ -10,7 +10,7 @@ import org.lxbigdata.sparklet.TaskContext
  * @author lx
  * @version 1.0   
  */
-class Aggregator [K,V,C]
+case class Aggregator [K,V,C]
 (
   createCombiner:V =>C,
   mergeValue: (C,V) => C,
@@ -22,7 +22,7 @@ class Aggregator [K,V,C]
     combiners.insertAll(iter)
     combiners.iterator
   }
-  def combineValuesByKey(iter:Iterator[_<:Product2[K,V]],context:TaskContext):Iterator[(K,C)] = {
+  def combineValuesByKey(iter:Iterator[_ <: Product2[K,V]],context:TaskContext):Iterator[(K,C)] = {
     val combiners = new ExternalAppendOnlyMap[K,V,C](createCombiner, mergeValue, mergeCombiner)
     combiners.insertAll(iter)
     combiners.iterator

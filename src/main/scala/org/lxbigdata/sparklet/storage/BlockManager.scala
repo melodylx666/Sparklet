@@ -39,10 +39,11 @@ class BlockManager(shuffleManager: ShuffleManager,conf:SparkletConf) {
   }
 
   def getDataFile(blockId: BlockId):File = {
-    Path.of(s"${conf.get("sparklet.tmp.dir")} ${blockId.name}.data").toFile
+    //todo 这里文件名的问题
+    new File(conf.get("sparklet.tmp.dir").get + blockId.name + ".data")
   }
   def getIndexFile(blockId: BlockId):File = {
-    Path.of(s"${conf.get("sparklet.tmp.dir")} ${blockId.name}.index").toFile
+    new File(conf.get("sparklet.tmp.dir").get + blockId.name + ".index")
   }
 
   //对应block的输入流

@@ -21,14 +21,13 @@ abstract class Dependency [T] extends Serializable{
 //窄依赖,可以进行算子链合并计算
 abstract class NarrowDependency[T](_rdd:RDD[T]) extends Dependency[T] {
   def getParents(partitionId: Int): Seq[Int] //这里是Seq，因为窄依赖分为OneToOne和Range
+  override def rdd: RDD[T] = _rdd
 }
 
 class OneToOneDependency[T](_rdd:RDD[T]) extends NarrowDependency[T](_rdd) {
   override def getParents(partitionId: Int): List[Int] = {
     List(partitionId)
   }
-
-  override def rdd: RDD[T] = _rdd
 }
 
 class RangeDependency[T](_rdd:RDD[T],smallStart:Int,bigStart:Int,length:Int) extends NarrowDependency[T](_rdd) {

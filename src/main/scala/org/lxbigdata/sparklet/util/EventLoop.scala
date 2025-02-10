@@ -20,9 +20,12 @@ abstract class EventLoop[E](name:String) {
   //后台守护线程，用于 master Scheduler事件分发
   private val eventThread = new Thread(name){
     setDaemon(true)
+    setName("loop thread")
     override def run():Unit = {
       try{
         while(!stopped.get()){
+          //todo 第二次大问题，queue阻塞
+          //todo 第四次，resultStage再次阻塞了
           val event = eventQueue.take() //blocking when queue is empty
           onReceive(event)
         }
@@ -33,6 +36,7 @@ abstract class EventLoop[E](name:String) {
     }
   }
   //start all
+  //todo 第一次全局调试，忘记启动了，全局资源都暂时没有统一关闭
   def start():Unit = {
     if(stopped.get()){
       throw new IllegalStateException(s"${name} has already been stopped")

@@ -27,11 +27,8 @@ class SparkletConf() {
   }
 
   def setTmpDir(tmpDir: String): SparkletConf = {
-    try{
-      val path: Path = Files.createDirectory(Path.of(tmpDir))
-    }catch {
-      case e: Exception =>
-        throw new Exception("tmpDir is not a valid directory")
+    if (!Files.exists(Path.of(tmpDir))) {
+          Files.createDirectories(Path.of(tmpDir))
     }
     set("sparklet.tmp.dir", tmpDir)
   }

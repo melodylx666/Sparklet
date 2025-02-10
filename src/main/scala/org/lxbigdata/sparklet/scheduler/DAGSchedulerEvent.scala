@@ -36,3 +36,8 @@ case class SimpleFinalTaskCompletion
   task: Task[_],
   result:Any
 ) extends DAGSchedulerEvent
+
+case class SimpleMapStageCompletion
+(
+  stage:Stage
+) extends DAGSchedulerEvent

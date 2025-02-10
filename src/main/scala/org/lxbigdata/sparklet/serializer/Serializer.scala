@@ -3,7 +3,7 @@ package org.lxbigdata.sparklet.serializer
 import org.lxbigdata.sparklet.SparkletEnv
 import org.lxbigdata.sparklet.util.{ByteBufferInputStream, NextIterator}
 
-import java.io.{ByteArrayOutputStream, EOFException, InputStream, OutputStream}
+import java.io.{ByteArrayOutputStream, Closeable, EOFException, InputStream, OutputStream}
 import java.nio.ByteBuffer
 import scala.reflect.ClassTag
 
@@ -15,7 +15,7 @@ import scala.reflect.ClassTag
  * @author lx
  * @version 1.0   
  */
-trait Serializer {
+abstract class Serializer {
   def newInstance(): SerializerInstance
 }
 
@@ -26,7 +26,7 @@ object Serializer {
   }
 }
 
-trait SerializerInstance {
+abstract class SerializerInstance {
   def serialize[T: ClassTag](t: T): ByteBuffer
 
   def deserialize[T: ClassTag](bytes: ByteBuffer): T
@@ -55,7 +55,7 @@ trait SerializerInstance {
  * :: DeveloperApi ::
  * A stream for writing serialized objects.
  */
-trait SerializationStream {
+abstract class SerializationStream extends Closeable{
   def writeObject[T: ClassTag](t: T): SerializationStream
   def flush(): Unit
   def close(): Unit
@@ -73,7 +73,7 @@ trait SerializationStream {
  * :: DeveloperApi ::
  * A stream for reading serialized objects.
  */
-trait DeserializationStream {
+abstract class DeserializationStream extends Closeable{
   def readObject[T: ClassTag](): T
   def close(): Unit
 

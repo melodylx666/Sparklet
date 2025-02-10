@@ -21,6 +21,7 @@ class ShuffleMapStage
   val shuffleDep:ShuffleDependency[_,_,_]
 ) extends Stage(id,rdd,numTasks,parents, firstJobId) {
   //Returns true if the map stage is ready, i.e. all partitions have shuffle outputs
+  //todo 第三个大问题,这里没有变导致阻塞
   var isAvailable: Boolean = false
 
 

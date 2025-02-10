@@ -2,7 +2,7 @@ package org.lxbigdata.sparklet.network
 
 import com.google.common.io.ByteStreams
 
-import java.io.{FileInputStream, InputStream}
+import java.io.{File, FileInputStream, InputStream}
 
 /**
  * ClassName: ManagedBuffer
@@ -21,7 +21,7 @@ abstract class ManagedBuffer {
 }
 
 // 文件段读取流
-class FileSegmentManagedBuffer(val file: String, val offset: Long, val length: Long) extends ManagedBuffer {
+class FileSegmentManagedBuffer(val file: File, val offset: Long, val length: Long) extends ManagedBuffer {
   //从文件流读取任意一段
   override def createInputStream(): InputStream = {
     val is = new FileInputStream(file)

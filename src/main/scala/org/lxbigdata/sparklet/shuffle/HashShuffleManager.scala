@@ -20,10 +20,15 @@ class HashShuffleManager extends ShuffleManager{
   }
 
   override def getReader[K, C](handle: ShuffleHandle, startPartition: Int, endPartition: Int, context: TaskContext): ShuffleReader[K, C] = {
-    ???
+    new HashShuffleReader[K, C](handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)
   }
 
-  override def shuffleBlockManager: ShuffleBlockManager = ???
+  override def shuffleBlockManager: ShuffleBlockManager = {
+    fileShuffleBlockManager
+  }
 
-  override def stop(): Unit = ???
+  override def stop(): Unit = {
+    fileShuffleBlockManager.stop()
+  }
+
 }

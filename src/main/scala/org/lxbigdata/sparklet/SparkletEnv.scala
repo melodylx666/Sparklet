@@ -28,14 +28,11 @@ object SparkletEnv {
     val shuffleManager = new HashShuffleManager()
     val serializer = new JavaSerializer()
     val blockManager = new BlockManager(shuffleManager, sparkletConf)
-    val env = new SparkletEnv(serializer, shuffleManager, blockManager)
-    env
+    sparkletEnv = new SparkletEnv(serializer, shuffleManager, blockManager)
+    sparkletEnv
   }
 
   def get: SparkletEnv = {
-    if (sparkletEnv == null) {
-      throw new IllegalStateException("SparkletEnv has not been initialized")
-    }
     sparkletEnv
   }
 

@@ -21,7 +21,7 @@ class ShuffleMapTask
 ) extends Task[MapStatus](stageId,partition.index){
 
   override def runTask(context: TaskContext): MapStatus = {
-    println("shuffleMapTask开始执行")
+    println("shuffleMapTask开始执行" + Thread.currentThread().getName)
     val manager = new HashShuffleManager()
     val writer = manager.getWriter[Any,Any](dep.shuffleHandle, partitionId, context)
     writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any,Any]]])

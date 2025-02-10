@@ -1,7 +1,7 @@
 package org.lxbigdata.sparklet
 
-import org.lxbigdata.sparklet.rdd.RDD
-import org.lxbigdata.sparklet.scheduler.{DAGScheduler, SimpleTaskScheduler}
+import org.lxbigdata.sparklet.rdd.{FileRDD, RDD}
+import org.lxbigdata.sparklet.scheduler.{DAGScheduler, LocalBackEnd, SimpleTaskScheduler}
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.reflect.ClassTag
@@ -24,7 +24,14 @@ class SparkletContext(sparkletConf: SparkletConf) {
   private var _env: SparkletEnv = SparkletEnv.createDriverEnv(sparkletConf)
   private var _taskScheduler: SimpleTaskScheduler = new SimpleTaskScheduler()
   private var _dagScheduler: DAGScheduler = new DAGScheduler(this, _taskScheduler)
-
+  //注意这个backend
+  private var _backend = {
+    val end = new LocalBackEnd(sparkletConf, _taskScheduler)
+    end
+  }
+  //初始化taskScheduler
+  //todo
+  _taskScheduler.init(_backend, _dagScheduler)
   def newRDDId(): Int = {
     nextRDDId.getAndIncrement()
   }
@@ -34,7 +41,11 @@ class SparkletContext(sparkletConf: SparkletConf) {
   def getEnv: SparkletEnv = {
     _env
   }
-
+  /*-------------用户api系列------------*/
+  def textFile(path:String):RDD[String] = {
+    new FileRDD[String](this,path)
+  }
+  /*-------------提交任务系列------------*/
   //rdd,func
   def runJob[T:ClassTag, U:ClassTag](finalRDD: RDD[T],func:Iterator[T] => U):Array[U] = {
     runJob(finalRDD,func,finalRDD.partitions.indices)
@@ -70,6 +81,6 @@ class SparkletContext(sparkletConf: SparkletConf) {
     partitions:Seq[Int],
     resultHandler:(Int,U) => Unit
   ):Unit = {
-      ???
+    _dagScheduler.runJob(finalRDD,func,partitions.toArray,resultHandler)
   }
 }

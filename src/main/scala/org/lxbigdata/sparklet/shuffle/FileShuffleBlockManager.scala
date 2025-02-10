@@ -45,7 +45,7 @@ class FileShuffleBlockManager extends ShuffleBlockManager {
   //返回对应blockId的IO流
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
     val file = blockManager.getDataFile(blockId)
-    new FileSegmentManagedBuffer(file.getName, 0, file.length)
+    new FileSegmentManagedBuffer(file, 0, file.length)
   }
 
   override def stop(): Unit = ???
