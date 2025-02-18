@@ -22,7 +22,7 @@ class FSBufferTest01 {
     val path = Files.createFile(Path.of("test.txt"))
     Files.write(path,"hello world".getBytes)
 
-    val buffer = new FileSegmentManagedBuffer(path.toFile.getPath, 6,5) //offset + length
+    val buffer = new FileSegmentManagedBuffer(path.toFile, 6,5) //offset + length
     val buffer1 = buffer.retain()
     val stream = buffer1.createInputStream()
     val bytes = stream.readAllBytes()
@@ -41,7 +41,7 @@ class FSBufferTest01 {
     val serializationStream = new JavaSerializationStream(outputStream, 100, true)
     serializationStream.writeObject(str)
     //创建文件段读取流,并包装为反序列化流
-    val buffer = new FileSegmentManagedBuffer(path.toFile.getPath, 0,100) //offset + length
+    val buffer = new FileSegmentManagedBuffer(path.toFile, 0,100) //offset + length
     val buffer1 = buffer.retain()
     val stream = buffer1.createInputStream()
 

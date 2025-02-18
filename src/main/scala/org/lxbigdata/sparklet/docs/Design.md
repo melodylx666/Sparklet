@@ -235,10 +235,15 @@ trait DeserializationStream {
     "void" -> classOf[Unit])
 ```
 
-
 ## 算子设计
 
 ### 分区器
+
+分区器处理的是RDD的内部数据如何进行分配，常见的有三种内部分区方式:
+
+* 水平分区
+* Hash分区
+* Range分区
 
 #### Hash分区器
 
@@ -366,4 +371,160 @@ class RangePartitioner[K : Ordering : ClassTag, V](
 
 可能会有疑问，说既然`rangepartition`可以进行`partition`粒度的排序，然后`sort-based-shuffle`也是分区粒度的排序，那为什么还需要前者呢？
 
-我在这里看过源码之后并没有找到两者有结合的方式，并且`shuffle`也不止一种`sort-based`，可以看我的技术博客中总结的`sql`剖析，`sparksql`一共5种`shuffle`，还有`sort-based`，所以`rangepartition`就很有必要了。、
+我在这里看过源码之后并没有找到两者有结合的方式，并且`shuffle`也不止一种`hash-based`，可以看我的技术博客中总结的`sql`剖析，`sparksql`一共5种`shuffle`，还有`sort-based`，所以`rangepartition`就很有必要了。
+
+### RDD
+
+#### 抽象类
+
+**构造器**
+
+一个RDD抽象类，其主构造器针对的是通用情况，也就是上游依赖有多个。当是`OneToOne`的时候，会有一个辅助构造器。
+
+**成员变量**
+
+* 运行上下文信息
+* 上游依赖
+* id
+
+**方法**
+
+其方法分为多类，具体如下:
+
+* 依赖
+  * 获取上游依赖
+* 分区
+  * 获得该RDD的内部分区器
+  * 获得该RDD的所有分区集合(通过`Partition`类抽象),每个算子都应该实现这个抽象方法。
+* 迭代计算
+  * 该RDD包装的计算逻辑(`compute`)
+  * 计算结果迭代器
+* 通用高阶函数
+  * transform方法
+  * action方法
+
+#### FileRDD
+
+FIleRDD的功能就是从文件将数据通过迭代器方式读取进来。这里使用的迭代器是`Scala`的迭代器，并不是增强迭代器。它总是第一个算子，所以父RDD为空。
+
+**获取分区集合**
+
+此处的思路，是针对每个文件，包一个分区，并没有文件切片的实现。
+
+```java
+  override def getPartitions: Array[Partition] = {
+    import scala.collection.JavaConverters._
+    val directoryStream = Files.newDirectoryStream(Path.of(path))
+    var i = 0
+    directoryStream
+      .iterator()
+      .asScala.
+      filter(_.toFile.length > 0)
+      .map(file => {
+        //localFile:目录下的一个小文件对应一个partition
+        //这里可以使用自增id
+        val partition = new FilePartition(id, i, file.toFile.getAbsolutePath)
+        i += 1
+        partition
+      }).toArray
+  }
+```
+
+**将分区文件转换为迭代器**
+
+直接将每个分区对应文件通过`Source.fromFile`读进来，就是一个迭代器。
+
+
+#### ShuffledRDD
+
+首先声明一点，就是ShuffledRDD是在下游的,也就是一个Stage的开头。
+
+所以很显然，它包装的`compute`逻辑就是shuffle read。
+
+所以它的父RDD，就是上游的RDD，即提供给数据让shuffleRDD生成每个分区的RDD。
+
+#### Shuffle发生时机
+
+既然ShuffledRDD只会进行shuffleRead，那么ShuffleWrite在哪里进行呢？
+
+其实在runtask的逻辑里面。Spark的Stage分为mapStage和resultStage，同样的，任务分为ShuffleMapTask以及ResultTask。其中的mapStage最后，总是会进行ShuffleWrite。
+
+下面来看ShuffleMapTask：
+
+显然，在ShuffleMapTask，进行的就是ShuffleWrite。
+
+```java
+  override def runTask(context: TaskContext): MapStatus = {
+    println("shuffleMapTask开始执行" + Thread.currentThread().getName)
+    val manager = new HashShuffleManager()
+    val writer = manager.getWriter[Any,Any](dep.shuffleHandle, partitionId, context)
+    writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any,Any]]])
+    return writer.stop(success = true).get
+  }
+```
+
+
+#### 到底是不是Lazy
+
+可能许多没有深入了解过`Spark & Scala`的人，都会有这样的误区。会认为Spark的最典型的触发`action`再求值是通过`lazy`关键字实现的。这种想法显然是错误的。
+
+`Spark`之所以能够处理这么大数据量，核心归功于其迭代器模式的实现。它的一个`stage`的算子拍扁，复合成一个复杂的函数逻辑，然后在其上对每个迭代器的数据进行操作，然后该数据即结束这部分计算。
+
+而其`lazy`的效果，正是不断将`compute`逻辑复合在源数据`iterator`之上的结果。也就是说，它对每个大文件/block开一个迭代器，然后同一时刻只有一个数据进来，在内存中过完计算就出去。
+
+我们可以看一看第一个stage的计算过程，也就是从`File -> ShuffleWrite`。
+
+![image.png](assets/compute.png)
+
+很显然，看栈帧中的compute &  iterator,就说明了一切。
+
+
+
+## 依赖设计
+
+数据依赖分为宽依赖和窄依赖。
+
+### 窄依赖
+
+如果新生成的`child`算子的每个分区，只依赖`parent`算子的部分分区，则称为窄依赖。
+
+窄依赖是进行`pipline`的关键。`Flink`中也有类似操作(`Chaining`）。
+
+#### OneToOneDependency
+
+父子算子分区数量一致，并且一一对应。所以对于每个子分区，其父分区ID和其一致，直接包一个`List`返回即可。
+
+#### RangeDependency
+
+父子算子经过区域化之后，存在一一对应关系。最典型的就是`union`算子。则需要计算`base + offset`。
+
+### 宽依赖
+
+#### ShuffleDependency
+
+子算子每个分区的数据都依赖父算子的所有分区的一部分，比如1/2等等。
+
+这里的ShuffleDependency内的RDD，是上游的RDD。而ShuffleDependency是被下游的ShuffledRDD拿着的，所所以可以方便进行Shuffle wirte & read。
+
+```java
+class ShuffleDependency[K:ClassTag,V:ClassTag,C:ClassTag]
+(
+  @transient private var _rdd:RDD[_<:Product2[K,V]],
+  val partitioner:Partitioner,
+  val serializer:Serializer,
+  val keyOrdering:Option[Ordering[K]]=None,
+  val aggregator:Option[Aggregator[K,V,C]]=None,
+  val mapSideCombine:Boolean=false
+) extends Dependency[Product2[K,V]]{
+  //shuffleId
+  val shuffleId =  _rdd.context.newShuffleId()
+  //获取shuffle handle来操作shuffle
+  val shuffleHandle = _rdd.context.getEnv.shuffleManager.registerShuffle(shuffleId,_rdd.partitions.length,this)
+  //rdd
+  override def rdd: RDD[Product2[K, V]] = {
+    _rdd.asInstanceOf[RDD[Product2[K,V]]]
+  }
+}
+```
+
+对于宽依赖，其要求上游进行`shuffle write`的算子是`pair-RDD`。

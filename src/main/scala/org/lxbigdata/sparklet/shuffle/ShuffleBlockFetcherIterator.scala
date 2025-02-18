@@ -8,7 +8,7 @@ import org.lxbigdata.sparklet.shuffle.ShuffleBlockFetcherIterator.{FetchResult, 
 import org.lxbigdata.sparklet.storage.{BlockId, BlockManager, ShuffleBlockId}
 
 import java.io.File
-import java.nio.file.{Files, Path}
+import java.nio.file.{DirectoryStream, Files, Path}
 import java.util.concurrent.LinkedBlockingQueue
 import scala.collection.mutable.ArrayBuffer
 
@@ -21,10 +21,10 @@ import scala.collection.mutable.ArrayBuffer
  * @version 1.0
  */
 class ShuffleBlockFetcherIterator(
-                                     context: TaskContext,
-                                     blockManager: BlockManager,
-                                     serializer: Serializer
-                                   ) extends Iterator[(BlockId, Iterator[Any])] {
+                                   context: TaskContext,
+                                   blockManager: BlockManager,
+                                   serializer: Serializer
+                                 ) extends Iterator[(BlockId, Iterator[Any])] {
 
   var numBlocksToFetch = 0
   var numBlocksProcessed = 0
@@ -47,16 +47,15 @@ class ShuffleBlockFetcherIterator(
       }
     }
   }
-  //todo 使用jdk Files类重写
+
+  //
   def splitLocalRemoteBlocks(): Unit = {
     import scala.collection.JavaConverters._
-    //
-    val value: String = blockManager.getConf.get("sparklet.tmp.dir").get
-    println(value)
-    val files = FileUtils.listFiles(new File(blockManager.getConf.get("sparklet.tmp.dir").get), null, false)
-    for (file <- files.asScala) {
-      var name = file.getName
-      if(name.endsWith(".data")) {
+    val files = Files.newDirectoryStream(Path.of(blockManager.getConf.get("sparklet.tmp.dir").get))
+    files.asScala.foreach(file => {
+      var name = file.toFile.getName
+      //shuffle_0_0_0.data
+      if (name.endsWith(".data")) {
         name = name.substring(0, name.lastIndexOf("."))
         if (name.endsWith(context.partitionId.toString)) {
           val fields = name.split("_")
@@ -66,7 +65,7 @@ class ShuffleBlockFetcherIterator(
           localBlocks += ShuffleBlockId(shuffleId, mapId, reduceId)
         }
       }
-    }
+    })
   }
 
   def initialize(): Unit = {

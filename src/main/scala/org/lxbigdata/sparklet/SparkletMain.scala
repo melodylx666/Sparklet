@@ -16,12 +16,12 @@ object SparkletMain {
       .setTmpDir("tmp\\")
       .setAppName("sparklet")
     val sc = new SparkletContext(sparkletConf)
-    val lines = sc.textFile("data/test.txt")
+    val lines = sc.textFile("data")
     val value: RDD[(String, Int)] = lines.flatMap(line => line.split(" "))
       .filter(word => word.length > 0)
       .map(word => (word, 1))
     val result = value.reduceByKey(_ + _)
     val tuples: Array[(String, Int)] = result.collect()
-    tuples.foreach(tuple => println(tuple._1 + ":" + tuple._2))
+    println(tuples.mkString(","))
   }
 }

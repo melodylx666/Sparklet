@@ -1,9 +1,8 @@
 package org.lxbigdata.sparklet.rdd
 
-import org.apache.commons.io.FileUtils
 import org.lxbigdata.sparklet.{Partition, SparkletContext, TaskContext}
 
-import java.io.File
+import java.nio.file.{DirectoryStream, Files, Path}
 import scala.io.{BufferedSource, Source}
 import scala.reflect.ClassTag
 
@@ -18,16 +17,20 @@ import scala.reflect.ClassTag
 class FileRDD [T:ClassTag](sc:SparkletContext,path:String) extends RDD[T](sc,List()){
 
   override def getPartitions: Array[Partition] = {
-    val files = FileUtils.listFiles(new File(path), Array("txt"), false)
     import scala.collection.JavaConverters._
+    val directoryStream = Files.newDirectoryStream(Path.of(path))
     var i = 0
-    files.asScala.filter(_.length > 0).map(file => {
-      //localFile:目录下的一个小文件对应一个partition
-      //这里可以使用自增id
-      val partition = new FilePartition(id, i, file.getAbsolutePath)
-      i += 1
-      partition
-    }).toArray
+    directoryStream
+      .iterator()
+      .asScala.
+      filter(_.toFile.length > 0)
+      .map(file => {
+        //localFile:目录下的一个小文件对应一个partition
+        //这里可以使用自增id
+        val partition = new FilePartition(id, i, file.toFile.getAbsolutePath)
+        i += 1
+        partition
+      }).toArray
   }
 
   override def compute(split: Partition, context: TaskContext): Iterator[T] = {

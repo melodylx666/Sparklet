@@ -6,6 +6,7 @@ import org.lxbigdata.sparklet.rdd.RDD
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
+import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
@@ -26,6 +27,7 @@ class DAGScheduler
   private val nextStageId = new AtomicInteger(0)
   //todo 暂时暴露出来让backend使用
   val eventProcessLoop = new DAGSchedulerEventProcessLoop(this)
+  eventProcessLoop.start()
   //shuffleId -> ShuffleMapStage
   private val shuffleIdToMapStage = mutable.Map[Int,ShuffleMapStage]()
   //stageId -> stage
@@ -35,7 +37,6 @@ class DAGScheduler
   private val waitingStages = mutable.Set[Stage]()
   //Stages we are running right now
   private val runningStages = mutable.Set[Stage]()
-
   def runJob[T,U]
   (
     finalRDD:RDD[T],
@@ -43,15 +44,14 @@ class DAGScheduler
     partitions:Array[Int],
     resultHandler:(Int,U) => Unit
   ):Unit = {
-    val waiter = submitJob(finalRDD,func,partitions,resultHandler)
+    val waiter = submitJob(finalRDD, func, partitions, resultHandler)
+    //todo 第六个问题，这里直接提前结束了，应该也来一个promise
     ThreadUtils.awaitReady(waiter.completionFuture,Duration.Inf)
     waiter.completionFuture.value.get match {
       case Success(value) => {
-        println("job 执行成功了")
+        println("end")
       }
-      case Failure(exception) => {
-        println(s"job 执行失败了:${exception}")
-      }
+      case Failure(exception) =>
     }
   }
 
@@ -94,7 +94,11 @@ class DAGScheduler
     jobId:Int
   ): ResultStage = {
     val shuffleDeps = getShuffleDependencies(finalRDD)
-    ???
+    val parents = getOrCreateParentStage(shuffleDeps,jobId)
+    val stageId = nextStageId.getAndIncrement()
+    val resultStage = new ResultStage(stageId, finalRDD, func, partitions, parents, jobId)
+    //stage切分结束
+    resultStage
   }
   private def getShuffleDependencies(curRDD: RDD[_]):mutable.Set[ShuffleDependency[_,_,_]] = {
     //用来保存shuffle依赖的hashSet，因为上游可能有多个依赖关系(比如join算子)，所以用set集合
@@ -196,7 +200,7 @@ class DAGScheduler
       val missing:List[Stage] = getMissingParentsStages(stage).sortBy(x => x.id)
       //base case
       if(missing.isEmpty){
-        return submitMissingTasks(stage,nextJobId.getAndIncrement())
+        return submitMissingTasks(stage,nextJobId.get()-1)
       }
       waitingStages +=stage
       missing.foreach(x => submitStage(x))
@@ -261,28 +265,49 @@ class DAGScheduler
 
     //提交任务给taskScheduler，让其分发计算任务到backend(remote or local)
     if(tasks.nonEmpty){
-      //注册一个StageWaiter
-      val waiter: MapStageWaiter = MapStageWaiter.getOrCreate(this, stage.id, tasks.size)
-      taskScheduler.submitTasks(new TaskSet(tasks.toArray,stage.id,jobId))
-      //等待任务完成
-      ThreadUtils.awaitReady(waiter.completionFuture, Duration.Inf)
-      waiter.completionFuture.value.get match {
-        case Success(v) => {
-          submitWaitingChildStages(stage)
+      stage match {
+        case stage: ShuffleMapStage => {
+          //注册一个StageWaiter
+          val waiter: MapStageWaiter = MapStageWaiter.getOrCreate(this, stage.id, tasks.size)
+          taskScheduler.submitTasks(new TaskSet(tasks.toArray,stage.id,jobId))
+          //等待任务完成
+          ThreadUtils.awaitReady(waiter.completionFuture, Duration.Inf)
+          waiter.completionFuture.value.get match {
+            case Success(v) => {
+              stage.asInstanceOf[ShuffleMapStage].isAvailable = true
+              eventProcessLoop.post(SimpleMapStageCompletion(stage))
+            }
+            case Failure(e) => {
+              println(s"can not forward")
+            }
+          }
         }
-        case Failure(e) => {
-          println(s"can not forward")
+        //todo 第五个，没有区分stage导致异常
+        case stage: ResultStage => {
+          val waiter = JobWaiter.checkJob(jobId)
+          //todo 第7个，resultHandler的执行线程？
+          //todo 第8个 这里结束不了，数据读不进来？
+          taskScheduler.submitTasks(new TaskSet(tasks.toArray, stage.id, stage.firstJobId))
+          ThreadUtils.awaitReady(waiter.completionFuture,Duration.Inf)
+          waiter.completionFuture.value.get match {
+            case Success(value) => {
+              println("job 执行成功了")
+            }
+            case Failure(exception) => {
+              println(s"job 执行失败了:${exception}")
+            }
+          }
         }
       }
     }
   }
 
   //submit the waiting child stage,like: ResultStage
-  private def submitWaitingChildStages(stage: Stage):Unit ={
+   def submitWaitingChildStages(stage: Stage):Unit ={
     val stages: Seq[Stage] = waitingStages.filter(x => x.parents.contains(stage)).toList
     waitingStages --= stages
-    for(stage <- stages.sortBy(x => x.id)){
-      submitStage(stage)
+    for(s <- stages.sortBy(x => x.id)){
+      submitStage(s)
     }
   }
 }
@@ -298,6 +323,9 @@ class DAGSchedulerEventProcessLoop(dagScheduler:DAGScheduler)
     event match {
       case SimpleSubmitted(jobId,rdd,func,partitions,listener) => {
         dagScheduler.exec(jobId,rdd,func,partitions,listener)
+      }
+      case SimpleMapStageCompletion(stage) => {
+        dagScheduler.submitWaitingChildStages(stage)
       }
       case _ => {
         println("other event")
