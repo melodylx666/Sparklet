@@ -289,6 +289,7 @@ class DAGScheduler
           //todo 第8个 这里结束不了，数据读不进来？
           taskScheduler.submitTasks(new TaskSet(tasks.toArray, stage.id, stage.firstJobId))
           ThreadUtils.awaitReady(waiter.completionFuture,Duration.Inf)
+
           waiter.completionFuture.value.get match {
             case Success(value) => {
               println("job 执行成功了")

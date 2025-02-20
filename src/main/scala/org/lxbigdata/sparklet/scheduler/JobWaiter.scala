@@ -35,9 +35,14 @@ class JobWaiter[T]
    * @param result 任务结果
    */
   override def taskSucceeded(index: Int, result: Any): Unit = {
-    resultHandler(index,result.asInstanceOf[T])
-    println("final task succeed:" + Thread.currentThread().getName)
+    synchronized{
+      resultHandler(index,result.asInstanceOf[T])
+    }
+//    println("final task succeed:" + Thread.currentThread().getName)
+    println(s"final task[${index}] succeed")
+    println(s"finishedTasks now:${finishedTasks.get()}")
     if(finishedTasks.incrementAndGet() == totalTasks){
+      println(s"all final tasks of job[${jobId}] finished")
       jobPromise.success(())
     }
   }

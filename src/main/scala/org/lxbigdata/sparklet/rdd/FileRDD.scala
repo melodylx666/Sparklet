@@ -37,7 +37,7 @@ class FileRDD [T:ClassTag](sc:SparkletContext,path:String) extends RDD[T](sc,Lis
     val partition = getPartitions(split.index).asInstanceOf[FilePartition]
     val file: BufferedSource = Source.fromFile(partition.location)
     //这里由于localFileRDD的参数有classTag为string,所以运行的时候不擦除。这里数据采取lazy读取
-    file.getLines().asInstanceOf[Iterator[T]]
+    file.getLines().filter(_ != "").asInstanceOf[Iterator[T]]
   }
 }
 

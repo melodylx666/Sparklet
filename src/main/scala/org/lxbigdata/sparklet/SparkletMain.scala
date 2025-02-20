@@ -22,6 +22,6 @@ object SparkletMain {
       .map(word => (word, 1))
     val result = value.reduceByKey(_ + _)
     val tuples: Array[(String, Int)] = result.collect()
-    println(tuples.mkString(","))
+    println(tuples.length)
   }
 }
