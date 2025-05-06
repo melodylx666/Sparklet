@@ -47,6 +47,7 @@ abstract class EventLoop[E](name:String) {
   //stop all
   def stop():Unit = {
     if(stopped.compareAndSet(false,true)){
+      //到这里为止，eventloop线程本身两种状态:运行或者阻塞
       eventThread.interrupt()
       var onStopMethodCalled = false
       try{
@@ -55,6 +56,7 @@ abstract class EventLoop[E](name:String) {
         onStop()
       }catch {
         case ie:InterruptedException => {
+          //重新恢复到中断状态，防止不一致
           Thread.currentThread().interrupt()
           if(!onStopMethodCalled) onStop()
         }
