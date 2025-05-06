@@ -36,3 +36,9 @@ build/
 
 ### tmp目录忽略###
 tmp/
+
+### test文件忽略###
+src/test/
+
+### data文件忽略
+data/
