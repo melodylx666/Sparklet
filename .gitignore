@@ -33,3 +33,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### tmp目录忽略###
+tmp/
