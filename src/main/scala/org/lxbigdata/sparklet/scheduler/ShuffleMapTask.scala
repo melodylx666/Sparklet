@@ -21,6 +21,7 @@ class ShuffleMapTask
   dep:ShuffleDependency[_,_,_],
   partition:Partition
 ) extends Task[MapStatus](stageId,partition.index){
+  //这里的logger是跟着name-string走的，只取this.class.getName就会出现重复，所以要加额外后缀
   private val logger = Logger.getLogger(s"this.getClass.getName-${stageId}-${partition.index}")
   logger.addHandler(new ConsoleHandler())
   logger.setUseParentHandlers(false)
