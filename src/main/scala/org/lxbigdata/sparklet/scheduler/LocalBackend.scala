@@ -4,6 +4,7 @@ import org.lxbigdata.sparklet.SparkletConf
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Callable, ExecutorService, Executors, Future, ThreadFactory}
+import java.util.logging.{ConsoleHandler, Logger}
 
 /**
  * ClassName: LocalBackend
@@ -20,6 +21,10 @@ class LocalBackEnd(conf:SparkletConf, taskScheduler:SimpleTaskScheduler){
   private class TaskRunner(task:Task[_],jobId:Int) extends Runnable {
 
     override def run(): Unit = {
+//      val logger = Logger.getLogger(s"${this.getClass.getName}-${jobId}-${task.partitionId}")
+//      logger.addHandler(new ConsoleHandler())
+//      logger.setUseParentHandlers(false)
+//      logger.setLevel(java.util.logging.Level.INFO)
       val value: Any = task.run()
       value match {
         case m:MapStatus => {
@@ -27,7 +32,7 @@ class LocalBackEnd(conf:SparkletConf, taskScheduler:SimpleTaskScheduler){
           MapStageWaiter.checkStage(task.stageId).taskSucceeded(task.partitionId, value)
         }
         case _ => {
-          println(s"Thread:${Thread.currentThread().getName}")
+          //logger.info(s"Thread:${Thread.currentThread().getName}")
           JobWaiter.checkJob(jobId).taskSucceeded(task.partitionId, value)
         }
       }

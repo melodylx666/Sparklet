@@ -5,6 +5,7 @@ import org.lxbigdata.sparklet.{NarrowDependency, Partition, ShuffleDependency, S
 import org.lxbigdata.sparklet.rdd.RDD
 
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.{ConsoleHandler, Logger}
 import scala.collection.mutable
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
@@ -23,6 +24,12 @@ class DAGScheduler
   private val sc:SparkletContext,
   private val taskScheduler:SimpleTaskScheduler
 ){
+  //日志
+  private val logger = Logger.getLogger(this.getClass.getName)
+  logger.addHandler(new ConsoleHandler())
+  logger.setUseParentHandlers(false)
+  logger.setLevel(java.util.logging.Level.INFO)
+
   private val nextJobId = new AtomicInteger(0)
   private val nextStageId = new AtomicInteger(0)
   //todo 暂时暴露出来让backend使用
@@ -49,7 +56,7 @@ class DAGScheduler
     ThreadUtils.awaitReady(waiter.completionFuture,Duration.Inf)
     waiter.completionFuture.value.get match {
       case Success(value) => {
-        println("end")
+        logger.info("end")
       }
       case Failure(exception) =>
     }
@@ -246,8 +253,7 @@ class DAGScheduler
     //taskSet
     val tasks = stage match {
       case stage: ShuffleMapStage => {
-        //todo:更换日志信息输出，不要用println
-        println(s"提交ShuffleMapStage")
+        logger.info(s"提交ShuffleMapStage")
         stage.isAvailable
         partitionsToCompute.map(id => {
           val partition = partitions(id)
@@ -255,7 +261,7 @@ class DAGScheduler
         })
       }
       case stage: ResultStage => {
-        println(s"提交ResultStage")
+        logger.info(s"提交ResultStage")
         partitionsToCompute.map(id => {
           val partition = partitions(id)
           new ResultTask(stage.id, stage.rdd, stage.func, partition)
@@ -278,7 +284,7 @@ class DAGScheduler
               eventProcessLoop.post(SimpleMapStageCompletion(stage))
             }
             case Failure(e) => {
-              println(s"can not forward")
+              logger.info(s"can not forward")
             }
           }
         }
@@ -292,10 +298,10 @@ class DAGScheduler
 
           waiter.completionFuture.value.get match {
             case Success(value) => {
-              println("job 执行成功了")
+              logger.info("job 执行成功了")
             }
             case Failure(exception) => {
-              println(s"job 执行失败了:${exception}")
+              logger.info(s"job 执行失败了:${exception}")
             }
           }
         }
@@ -317,6 +323,11 @@ class DAGScheduler
 //todo ：eventLoop机制文档
 class DAGSchedulerEventProcessLoop(dagScheduler:DAGScheduler)
   extends EventLoop[DAGSchedulerEvent]("dag-scheduler-event-loop") {
+  private val logger = Logger.getLogger(this.getClass.getName)
+  logger.addHandler(new ConsoleHandler())
+  logger.setUseParentHandlers(false)
+  logger.setLevel(java.util.logging.Level.INFO)
+
   override def onReceive(event: DAGSchedulerEvent): Unit = {
     doOnReceive(event)
   }
@@ -329,7 +340,7 @@ class DAGSchedulerEventProcessLoop(dagScheduler:DAGScheduler)
         dagScheduler.submitWaitingChildStages(stage)
       }
       case _ => {
-        println("other event")
+        logger.info("other event")
       }
     }
   }

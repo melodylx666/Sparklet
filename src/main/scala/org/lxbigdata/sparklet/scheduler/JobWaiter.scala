@@ -39,17 +39,17 @@ class JobWaiter[T]
       resultHandler(index,result.asInstanceOf[T])
     }
 //    println("final task succeed:" + Thread.currentThread().getName)
-    println(s"final task[${index}] succeed")
-    println(s"finishedTasks now:${finishedTasks.get()}")
+    //println(s"final task[${index}] succeed")
+    //println(s"finishedTasks now:${finishedTasks.get()}")
     if(finishedTasks.incrementAndGet() == totalTasks){
-      println(s"all final tasks of job[${jobId}] finished")
+      //println(s"all final tasks of job[${jobId}] finished")
       jobPromise.success(())
     }
   }
 
   override def jobFailed(exception: Exception): Unit = {
     if(!jobPromise.tryFailure(exception)){
-      println(s"Ignore failure:${exception.getMessage}")
+      //println(s"Ignore failure:${exception.getMessage}")
     }
   }
 }
