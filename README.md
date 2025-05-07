@@ -2,7 +2,7 @@
 
 ## 介绍
 
-`Sparklet`- 这是一个保留基础功能的仿照`Spark`的本地大数据计算引擎`Demo`。
+`Sparklet`- 一个参考SparklCore的极简的单机批处理计算引擎
 
 ## 架构
 
